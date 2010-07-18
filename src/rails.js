@@ -27,11 +27,50 @@ jQuery(function ($) {
                 url     = el.attr('action') || el.attr('href'),
                 dataType  = el.attr('data-type')  || 'script';
 
+            // patch to support data-update-success, data-replace-success and data-remote-format
+            var domUpdater, receiver = null;              
+            if ((receiver = el.attr('data-update-success')) != null) {
+            	var position = el.attr('data-update-position');
+            	// TODO: support position
+            	//if (position != null) ajax_params['insertion']=position;
+            	
+            	domUpdater = function(data) {
+            	  if (receiver[0] != '#' && receiver[0] != '.') receiver = "#" + receiver;
+            	  $(receiver).html(data);
+          	  };
+              
+            }
+            else if ((receiver = el.attr('data-replace-success')) != null) {
+              if (receiver == 'self') {
+              	receiver = element.attr('id');    // special case: replace element itself
+              	domUpdater = function(data) {
+              	  el.replaceWith(data);
+            	  };                	  
+              }
+            	else if (receiver[0] == '.') {
+            		// replace first parent elemment which has that class
+            		var className = receiver;                		
+              	domUpdater = function(data) {
+              	  el.parents(className).each(function() {
+              	    $(this).replaceWith(data);
+            	    });                      
+              	};
+            	}                	
+          	}
+            
+            if (domUpdater != null) dataType = 'html';  // do not execute code returned from server
+            
+            var format = el.attr('data-remote-format');
+            //
+
+
             if (url === undefined) {
               throw "No URL specified for remote call (action or href must be present).";
             } else {
                 if (el.triggerAndReturn('ajax:before')) {
                     var data = el.is('form') ? el.serializeArray() : [];
+                    if (format != null) data.push({ name:'format', value:format});
+                    
                     $.ajax({
                         url: url,
                         data: data,
@@ -41,6 +80,7 @@ jQuery(function ($) {
                             el.trigger('ajax:loading', xhr);
                         },
                         success: function (data, status, xhr) {
+                            if (domUpdater != null) domUpdater(data);   // update or replace dom elements                            
                             el.trigger('ajax:success', [data, status, xhr]);
                         },
                         complete: function (xhr) {
